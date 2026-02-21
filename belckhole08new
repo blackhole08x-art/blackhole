@@ -1,0 +1,593 @@
+import tkinter as tk
+from tkinter import scrolledtext, messagebox, filedialog
+import math
+import random
+import string
+import base64
+import hashlib
+import time
+from threading import Thread
+
+# ======================= PAROL =======================
+def check_password():
+    if entry.get() == "bexruz":
+        login_win.destroy()
+        open_main_app()
+    else:
+        attempts[0] += 1
+        if attempts[0] >= 3:
+            messagebox.showerror("Xato", "3 marta noto'g'ri! Ilova yopilmoqda.")
+            login_win.destroy()
+        else:
+            messagebox.showwarning("Xato", f"Noto'g'ri parol! Qoldi: {3-attempts[0]} urinish")
+            entry.delete(0, tk.END)
+
+# ======================= DARK MODE =======================
+def apply_dark(win):
+    for w in win.winfo_children():
+        if isinstance(w, (tk.Label, tk.Button, tk.Frame)):
+            w.config(bg="#000000", fg="#FFFFFF")
+        elif isinstance(w, tk.Entry):
+            w.config(bg="#111111", fg="#FFFFFF", insertbackground="white")
+        elif isinstance(w, (tk.Text, scrolledtext.ScrolledText)):
+            w.config(bg="#000000", fg="#FF0000", insertbackground="white")
+        if hasattr(w, "winfo_children"):
+            apply_dark(w)
+
+# ======================= UNDOABLE TEXT =======================
+class UndoableText(scrolledtext.ScrolledText):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.history = []
+        self.index = -1
+        self.max = 50
+        self.bind("<KeyRelease>", self.save)
+
+    def save(self, event=None):
+        if event and event.keysym in ("Control_L", "Control_R", "Shift_L", "Shift_R"):
+            return
+        txt = self.get(1.0, tk.END)
+        if self.history and self.history[self.index] == txt:
+            return
+        self.index += 1
+        self.history = self.history[:self.index]
+        self.history.append(txt)
+        if len(self.history) > self.max:
+            self.history.pop(0)
+            self.index -= 1
+
+    def undo(self):
+        if self.index > 0:
+            self.index -= 1
+            self.delete(1.0, tk.END)
+            self.insert(tk.END, self.history[self.index])
+
+    def redo(self):
+        if self.index < len(self.history) - 1:
+            self.index += 1
+            self.delete(1.0, tk.END)
+            self.insert(tk.END, self.history[self.index])
+
+# ======================= MORSE CODE =======================
+letter_to_morse = {
+    'A': '.-', 'B': '-...', 'C': '-.-.', 'D': '-..', 'E': '.', 'F': '..-.', 'G': '--.', 'H': '....',
+    'I': '..', 'J': '.---', 'K': '-.-', 'L': '.-..', 'M': '--', 'N': '-.', 'O': '---', 'P': '.--.',
+    'Q': '--.-', 'R': '.-.', 'S': '...', 'T': '-', 'U': '..-', 'V': '...-', 'W': '.--', 'X': '-..-',
+    'Y': '-.--', 'Z': '--..',  '0': '-----', '1': '.----', '2': '..---', '3': '...--',
+    '4': '....-', '5': '.....', '6': '-....', '7': '--...', '8': '---..', '9': '----.'
+}
+morse_to_letter = {v: k for k, v in letter_to_morse.items()}
+
+# ======================= 3 TILLI OFFLINE TARJIMON =======================
+dict_en = {
+    "salom": "hello", "xayr": "goodbye", "rahmat": "thank you", "iltimos": "please", "ha": "yes",
+    "yo'q": "no", "qalaysiz": "how are you", "yaxshiman": "I'm fine", "ism": "name", "yosh": "age",
+    "maktab": "school", "o'qituvchi": "teacher", "o'quvchi": "student", "kitob": "book", "uy": "house",
+    "ota": "father", "ona": "mother", "aka": "brother", "opa": "sister", "do'st": "friend",
+    "sevgi": "love", "baxt": "happiness", "bugun": "today", "ertalab": "tomorrow", "kecha": "yesterday",
+    "bexruz": "Bekhruz", "temurbeklar": "Temurbeklar school", "farg'ona": "Ferghana", "toshkent": "Tashkent",
+    "dasturchi": "programmer", "python": "Python", "muvaffaqiyat": "success", "omad": "good luck"
+}
+dict_ru = {
+    "salom": "привет", "xayr": "пока", "rahmat": "спасибо", "iltimos": "пожалуйста", "ha": "да",
+    "yo'q": "нет", "qalaysiz": "как дела", "yaxshiman": "хорошо", "ism": "имя", "yosh": "возраст",
+    "maktab": "школа", "o'qituvchi": "учитель", "o'quvchi": "ученик", "kitob": "книга", "uy": "дом",
+    "ota": "отец", "ona": "мать", "aka": "брат", "opa": "сестра", "do'st": "друг",
+    "sevgi": "любовь", "baxt": "счастье", "bugun": "сегодня", "ertalab": "завтра", "kecha": "вчера"
+}
+dict_fr = {
+    "salom": "bonjour", "xayr": "au revoir", "rahmat": "merci", "iltimos": "s'il vous plaît", "ha": "oui",
+    "yo'q": "non", "qalaysiz": "comment allez-vous", "yaxshiman": "je vais bien", "ism": "nom", "yosh": "âge",
+    "maktab": "école", "o'qituvchi": "professeur", "o'quvchi": "élève", "kitob": "livre", "uy": "maison",
+    "ota": "père", "ona": "mère", "aka": "frère", "opa": "sœur", "do'st": "ami",
+    "sevgi": "amour", "baxt": "bonheur", "bugun": "aujourd'hui", "ertalab": "demain", "kecha": "hier"
+}
+for d in [dict_en, dict_ru, dict_fr]:
+    for k, v in list(d.items()):
+        d[k.upper()] = v.upper()
+        d[k.capitalize()] = v.capitalize()
+
+# ======================= FUNKSIYALAR =======================
+def open_chatbot():
+    chat_win = tk.Toplevel(root)
+    chat_win.title("SYGO ChatBot")
+    chat_win.geometry("800x600")
+    chat_win.config(bg="black")
+
+    # Chat oynasi
+    chat_text = tk.Text(chat_win, font=("Arial", 14), bg="black", fg="white", state=tk.DISABLED)
+    chat_text.pack(padx=10, pady=10, fill=tk.BOTH, expand=True)
+
+    # Entry qatori
+    entry = tk.Entry(chat_win, font=("Arial", 14))
+    entry.pack(padx=10, pady=10, fill=tk.X)
+    entry.focus()
+
+    # Savol-javob dictionary
+    savol_javob = {
+        "salom": ["AI: Salom Bexruz 👋", "Hey Bexruz 😎", "Assalom! 😊"],
+        "assalom": ["AI: Salom Bexruz 👋", "Hey Bexruz 😎", "Assalom! 😊"],
+        "hello": ["AI: Salom Bexruz 👋", "Hey Bexruz 😎", "Assalom! 😊"],
+
+        "isming nima": ["AI: Men Bexruzning sun'iy intellektiman 🤖"],
+        "sen kimsan": ["AI: Men Bexruzning sun'iy intellektiman 🤖"],
+
+        "qalesan": ["AI: Zo'rman 😎 Sen-chi?"],
+
+        "python nima": ["AI: Python bu mashhur dasturlash tili 🐍"],
+
+        "ai nima": ["AI: AI — sun'iy intellekt degani 🤖"],
+
+        "hazil ayt": ["AI: Dasturchilar choy ichmaydi, ular bug tuzatadi ☕😂"]
+    }
+
+    # 1 dan 1000 gacha avtomatik savol
+    for i in range(1, 1001):
+        savol_javob[f"savol{i}"] = [f"AI: Bu savol {i} raqamli javob"]
+
+    # Javob funksiyasi
+    def javob(event=None):
+        user_input = entry.get()
+        if not user_input.strip():
+            return
+
+        # Chatga foydalanuvchi yozuvi
+        chat_text.config(state=tk.NORMAL)
+        chat_text.insert(tk.END, f"Sen: {user_input}\n")
+        chat_text.config(state=tk.DISABLED)
+
+        text_lower = user_input.lower()
+        response = "AI: Tushunmadim 🙂"
+
+        import datetime, difflib, random
+        # Closest match
+        mos = difflib.get_close_matches(text_lower, savol_javob.keys(), n=1, cutoff=0.6)
+        if mos:
+            javoblar = savol_javob[mos[0]]
+            response = random.choice(javoblar)
+        elif "sana" in text_lower or "bugun" in text_lower:
+            today = datetime.datetime.now().strftime("%d-%m-%Y")
+            response = f"AI: Bugun sana {today}"
+        elif "vaqt" in text_lower or "soat" in text_lower:
+            now = datetime.datetime.now().strftime("%H:%M")
+            response = f"AI: Hozir soat {now}"
+        elif text_lower in ["exit", "chiqish", "yopish"]:
+            chat_win.destroy()
+            return
+
+        # Chatga AI javobi
+        chat_text.config(state=tk.NORMAL)
+        chat_text.insert(tk.END, f"{response}\n\n")
+        chat_text.config(state=tk.DISABLED)
+        chat_text.see(tk.END)
+
+        entry.delete(0, tk.END)
+
+    # Enter tugmasi va yuborish tugmasi
+    entry.bind("<Return>", javob)
+    tk.Button(chat_win, text="Yuborish", font=("Arial", 14), command=javob).pack(pady=5)
+def open_morse_pro():
+    win = tk.Toplevel(root)
+    win.title("Morse Code ")
+    win.geometry("1000x750")
+    win.config(bg="#000000")
+    tk.Label(win, text="MORSE CODE PRO", font=("Arial", 28, "bold"), fg="#FF0000", bg="#000000").pack(pady=20)
+
+    f = tk.Frame(win, bg="#000000"); f.pack(pady=10)
+    tk.Label(f, text="Matn:", fg="#FFFFFF", bg="#000000").grid(row=0, column=0, padx=10)
+    e1 = tk.Entry(f, width=70, font=16, bg="#111111", fg="#FFFFFF", insertbackground="white"); e1.grid(row=0, column=1)
+    tk.Label(f, text="Morse:", fg="#FFFFFF", bg="#000000").grid(row=1, column=0, padx=10)
+    e2 = tk.Entry(f, width=70, font=16, bg="#111111", fg="#FFFFFF", insertbackground="white"); e2.grid(row=1, column=1, pady=8)
+
+    output = UndoableText(win, height=20, font=("Courier", 18, "bold"), bg="#000000", fg="#FF0000")
+    output.pack(padx=30, pady=20, fill="both", expand=True)
+
+    def shifr():
+        res = "   ".join(letter_to_morse.get(c.upper(), "?") for c in e1.get())
+        output.delete(1.0, tk.END); output.insert(tk.END, res)
+    def deshifr():
+        words = e2.get().strip().split(" / ")
+        res = " ".join("".join(morse_to_letter.get(l, "?") for l in w.split()) for w in words)
+        output.delete(1.0, tk.END); output.insert(tk.END, res)
+    def copy():
+        root.clipboard_clear(); root.clipboard_append(output.get(1.0, tk.END).strip())
+        messagebox.showinfo("Nusxalandi", "Natija muvoffaqayatli amalga oshirildi!")
+
+    btns = tk.Frame(win, bg="#000000"); btns.pack(pady=15)
+    tk.Button(btns, text="SHIFRLASH", width=14, height=2, command=shifr).grid(row=0, column=0, padx=8)
+    tk.Button(btns, text="DESHIFRLASH", width=14, height=2, command=deshifr).grid(row=0, column=1, padx=8)
+    tk.Button(btns, text="COPY", width=10, height=2, command=copy).grid(row=1, column=0, padx=8, pady=10)
+    tk.Button(btns, text="CLEAR", width=10, height=2, command=lambda: [e1.delete(0,tk.END), e2.delete(0,tk.END), output.delete(1.0,tk.END)]).grid(row=1, column=1, padx=8, pady=10)
+    tk.Button(btns, text="EXIT", width=10, height=2, command=win.destroy).grid(row=1, column=2, padx=8, pady=10)
+    apply_dark(win)
+
+def open_sezar_pro():
+    win = tk.Toplevel(root)
+    win.title("Sezar Shifri ")
+    win.geometry("900x700")
+    win.config(bg="#000000")
+    tk.Label(win, text="SEZAR SHIFRI", font=("Arial", 28, "bold"), fg="#FF0000", bg="#000000").pack(pady=20)
+
+    f = tk.Frame(win, bg="#000000"); f.pack(pady=20)
+    tk.Label(f, text="Surish (K):", fg="#FFFFFF", bg="#000000").grid(row=0, column=0, padx=20)
+    k_entry = tk.Entry(f, width=10, font=18, bg="#111111", fg="#FFFFFF"); k_entry.grid(row=0, column=1); k_entry.insert(0, "3")
+    tk.Label(f, text="Matn:", fg="#FFFFFF", bg="#000000").grid(row=1, column=0, padx=20, pady=20)
+    text_entry = tk.Entry(f, width=70, font=18, bg="#111111", fg="#FFFFFF"); text_entry.grid(row=1, column=1)
+
+    output = UndoableText(win, height=18, font=("Arial", 20, "bold"), bg="#000000", fg="#FF0000")
+    output.pack(padx=40, pady=30, fill="both", expand=True)
+
+    def shifrlash():
+        try:
+            k = int(k_entry.get()) % 26
+            text = text_entry.get()
+            res = ""
+            for c in text:
+                if c.isupper(): res += chr((ord(c) - 65 + k) % 26 + 65)
+                elif c.islower(): res += chr((ord(c) - 97 + k) % 26 + 97)
+                else: res += c
+            output.delete(1.0, tk.END); output.insert(tk.END, res)
+        except:
+            output.delete(1.0, tk.END); output.insert(tk.END, "K son bo'lishi kerak!")
+    tk.Button(win, text="SHIFRLASH", width=20, height=2, command=shifrlash).pack(pady=20)
+    apply_dark(win)
+
+def open_base64_pro():
+    win = tk.Toplevel(root)
+    win.title("Base64")
+    win.geometry("950x750")
+    win.config(bg="#000000")
+    tk.Label(win, text="BASE64 PRO", font=("Arial", 28, "bold"), fg="#00FF00", bg="#000000").pack(pady=20)
+
+    entry = tk.Entry(win, width=80, font=18, bg="#111111", fg="#FFFFFF", insertbackground="white")
+    entry.pack(pady=20)
+
+    output = UndoableText(win, height=20, font=("Courier", 18), bg="#000000", fg="#00FF00")
+    output.pack(padx=30, pady=20, fill="both", expand=True)
+
+    def encode():
+        try:
+            encoded = base64.b64encode(entry.get().encode('utf-8')).decode('utf-8')
+            output.delete(1.0, tk.END); output.insert(tk.END, encoded)
+        except: output.delete(1.0, tk.END); output.insert(tk.END, "Xato")
+    def decode():
+        try:
+            decoded = base64.b64decode(entry.get().encode('utf-8')).decode('utf-8')
+            output.delete(1.0, tk.END); output.insert(tk.END, decoded)
+        except: output.delete(1.0, tk.END); output.insert(tk.END, "Noto'g'ri Base64")
+
+    btns = tk.Frame(win, bg="#000000"); btns.pack(pady=15)
+    tk.Button(btns, text="ENCODE", width=20, height=2, command=encode).grid(row=0, column=0, padx=10)
+    tk.Button(btns, text="DECODE", width=20, height=2, command=decode).grid(row=0, column=1, padx=10)
+    tk.Button(btns, text="COPY", width=12, height=2, command=lambda: root.clipboard_append(output.get(1.0, tk.END).strip())).grid(row=1, column=0, padx=10, pady=10)
+    apply_dark(win)
+
+def open_binary_pro():
+    win = tk.Toplevel(root)
+    win.title("Binary Converter")
+    win.geometry("950x750")
+    win.config(bg="#000000")
+    tk.Label(win, text="BINARY CONVERTER", font=("Arial", 28, "bold"), fg="#00FFFF", bg="#000000").pack(pady=20)
+
+    entry = tk.Entry(win, width=80, font=18, bg="#111111", fg="#FFFFFF", insertbackground="white")
+    entry.pack(pady=20)
+
+    output = UndoableText(win, height=20, font=("Courier", 18, "bold"), bg="#000000", fg="#00FFFF")
+    output.pack(padx=30, pady=20, fill="both", expand=True)
+
+    def text_to_bin():
+        binary = ' '.join(format(ord(c), '08b') for c in entry.get())
+        output.delete(1.0, tk.END); output.insert(tk.END, binary)
+
+    def bin_to_text():
+        try:
+            binary_str = entry.get().replace(" ", "")
+            text = ''.join(chr(int(binary_str[i:i+8], 2)) for i in range(0, len(binary_str), 8))
+            output.delete(1.0, tk.END); output.insert(tk.END, text)
+        except:
+            output.delete(1.0, tk.END); output.insert(tk.END, "Noto'g'ri binary format!")
+
+    btns = tk.Frame(win, bg="#000000"); btns.pack(pady=15)
+    tk.Button(btns, text="TEXT → BINARY", width=20, height=2, command=text_to_bin).grid(row=0, column=0, padx=10)
+    tk.Button(btns, text="BINARY → TEXT", width=20, height=2, command=bin_to_text).grid(row=0, column=1, padx=10)
+    tk.Button(btns, text="COPY", width=12, height=2, command=lambda: root.clipboard_append(output.get(1.0, tk.END).strip())).grid(row=1, column=0, padx=10, pady=10)
+    apply_dark(win)
+
+def open_hash_pro():
+    win = tk.Toplevel(root)
+    win.title("Hash Generator")
+    win.geometry("950x750")
+    win.config(bg="#000000")
+    tk.Label(win, text="HASH GENERATOR", font=("Arial", 28, "bold"), fg="#FFD700", bg="#000000").pack(pady=20)
+
+    entry = tk.Entry(win, width=80, font=18, bg="#111111", fg="#FFFFFF", insertbackground="white")
+    entry.pack(pady=20)
+
+    output = UndoableText(win, height=20, font=("Courier", 16), bg="#000000", fg="#FFD700")
+    output.pack(padx=30, pady=20, fill="both", expand=True)
+
+    def md5_hash():
+        text = entry.get().encode('utf-8')
+        output.delete(1.0, tk.END)
+        output.insert(tk.END, "MD5: " + hashlib.md5(text).hexdigest())
+
+    def sha256_hash():
+        text = entry.get().encode('utf-8')
+        output.delete(1.0, tk.END)
+        output.insert(tk.END, "SHA256: " + hashlib.sha256(text).hexdigest())
+
+    btns = tk.Frame(win, bg="#000000"); btns.pack(pady=15)
+    tk.Button(btns, text="MD5", width=15, height=2, command=md5_hash).grid(row=0, column=0, padx=15)
+    tk.Button(btns, text="SHA256", width=15, height=2, command=sha256_hash).grid(row=0, column=1, padx=15)
+    tk.Button(btns, text="IKKALASI", width=15, height=2, command=lambda: [md5_hash(), output.insert(tk.END, "\n\n"), sha256_hash()]).grid(row=0, column=2, padx=15)
+    apply_dark(win)
+
+def open_quadratic():
+    win = tk.Toplevel(root)
+    win.title("Kvadrat Tenglama Yechish")
+    win.geometry("600x650")
+    win.config(bg="#000000")
+
+    tk.Label(win, text="KVADRAT TENGLAMA", font=("Arial", 24, "bold"), fg="#FF0000", bg="#000000").pack(pady=30)
+
+    f = tk.Frame(win, bg="#000000"); f.pack(pady=20)
+    tk.Label(f, text="a =", font=20, fg="#FFFFFF", bg="#000000").grid(row=0, column=0, padx=30)
+    a = tk.Entry(f, width=15, font=20, bg="#111111", fg="#FFFFFF"); a.grid(row=0, column=1)
+    tk.Label(f, text="b =", font=20, fg="#FFFFFF", bg="#000000").grid(row=1, column=0, padx=30, pady=20)
+    b = tk.Entry(f, width=15, font=20, bg="#111111", fg="#FFFFFF"); b.grid(row=1, column=1)
+    tk.Label(f, text="c =", font=20, fg="#FFFFFF", bg="#000000").grid(row=2, column=0, padx=30)
+    c = tk.Entry(f, width=15, font=20, bg="#111111", fg="#FFFFFF"); c.grid(row=2, column=1)
+
+    out = tk.Text(win, height=10, font=18, bg="#000000", fg="#FF0000")
+    out.pack(padx=40, pady=40, fill="both", expand=True)
+
+    def solve():
+        try:
+            aa = float(a.get() or 0)
+            bb = float(b.get() or 0)
+            cc = float(c.get() or 0)
+            if aa == 0:
+                out.delete(1.0, tk.END); out.insert(tk.END, "a ≠ 0!")
+                return
+            D = bb**2 - 4*aa*cc
+            if D > 0:
+                x1 = (-bb + math.sqrt(D)) / (2*aa)
+                x2 = (-bb - math.sqrt(D)) / (2*aa)
+                res = f"x₁ = {x1:.4f}\nx₂ = {x2:.4f}"
+            elif D == 0:
+                x = -bb / (2*aa)
+                res = f"x = {x:.4f}"
+            else:
+                res = "Haqiqiy yechim yo'q"
+            out.delete(1.0, tk.END); out.insert(tk.END, res)
+        except:
+            out.delete(1.0, tk.END); out.insert(tk.END, "Son kiriting!")
+
+    tk.Button(win, text="HISOBLASH", width=20, height=2, command=solve).pack(pady=20)
+    apply_dark(win)
+
+def open_calculator():
+    win = tk.Toplevel(root)
+    win.title("Calculator Pro")
+    win.geometry("500x700")
+    win.config(bg="#000000")
+
+    entry = tk.Entry(win, width=30, font=("Arial", 24), bg="#111111", fg="#00FFFF", justify="right", insertbackground="white")
+    entry.pack(pady=20, padx=20)
+
+    frame = tk.Frame(win, bg="#000000"); frame.pack(pady=10)
+
+    def click(btn):
+        if btn == "C":
+            entry.delete(0, tk.END)
+        elif btn == "←":
+            entry.delete(len(entry.get())-1, tk.END)
+        elif btn == "=":
+            try:
+                res = eval(entry.get())
+                entry.insert(tk.END, f" = {res}")
+            except:
+                entry.insert(tk.END, " XATO")
+        else:
+            entry.insert(tk.END, btn)
+
+    buttons = [
+        ('C', 'red'), ('←', 'orange'), ('/', 'orange'), ('*', 'orange'),
+        ('7', 'gray'), ('8', 'gray'), ('9', 'gray'), ('-', 'orange'),
+        ('4', 'gray'), ('5', 'gray'), ('6', 'gray'), ('+', 'orange'),
+        ('1', 'gray'), ('2', 'gray'), ('3', 'gray'), ('=', 'green'),
+        ('0', 'gray'), ('.', 'gray'), ('(', 'orange'), (')', 'orange')
+    ]
+
+    row = col = 0
+    for (text, color) in buttons:
+        fg_color = "red" if color == "red" else "black" if color == "green" else "white"
+        bg_color = "#006400" if color == "green" else "#8B4513" if color == "orange" else "#000000"
+        tk.Button(frame, text=text, width=6, height=3, font=("Arial", 18, "bold"),
+                  bg=bg_color, fg=fg_color, command=lambda t=text: click(t)).grid(row=row, column=col, padx=5, pady=5)
+        col += 1
+        if col > 3:
+            col = 0
+            row += 1
+
+    apply_dark(win)
+
+def open_translator():
+    win = tk.Toplevel(root)
+    win.title("Offline Tarjimon ")
+    win.geometry("950x700")
+    win.config(bg="#000000")
+
+    tk.Label(win, text="OFFLINE TARJIMON ", font=("Arial", 26, "bold"), fg="#00FF00", bg="#000000").pack(pady=30)
+
+    tk.Label(win, text="So'z yoki ibora:", font=18, fg="#FFFFFF", bg="#000000").pack(pady=10)
+    entry = tk.Entry(win, width=60, font=18, bg="#111111", fg="#FFFFFF")
+    entry.pack(pady=10)
+
+    out = tk.Text(win, height=20, font=20, bg="#000000", fg="#00FF00")
+    out.pack(padx=40, pady=40, fill="both", expand=True)
+
+    def tarjima():
+        t = entry.get().strip()
+        en = dict_en.get(t, dict_en.get(t.lower(), "Lug'atda yo'q"))
+        ru = dict_ru.get(t, dict_ru.get(t.lower(), "Не найдено"))
+        fr = dict_fr.get(t, dict_fr.get(t.lower(), "Non trouvé"))
+        out.delete(1.0, tk.END)
+        out.insert(tk.END, f"Ingliz:    {en}\n\nRus:    {ru}\n\nFransuz: {fr}")
+
+    tk.Button(win, text="TARJIMA QILISH", width=25, height=2, command=tarjima).pack(pady=20)
+    apply_dark(win)
+
+# ======================= KATEGORIYALAR =======================
+def open_category(title, tools):
+    cat = tk.Toplevel(root)
+    cat.title(title)
+    cat.geometry("700x950")
+    cat.config(bg="#000000")
+    tk.Label(cat, text=title, font=("Arial", 28, "bold"), fg="#FF0000", bg="#000000").pack(pady=50)
+    for text, cmd in tools:
+        tk.Button(cat, text=text, width=38, height=2, font=("Arial", 11, "bold"),
+                  bg="#111111", fg="#FFFFFF", highlightbackground="#FF0000", highlightthickness=2,
+                  command=cmd).pack(pady=12)
+    tk.Button(cat, text="◀ ORQAGA", width=20, height=2, bg="#333333", fg="white", command=cat.destroy).pack(pady=30)
+    apply_dark(cat)
+
+def open_shifrlar():
+    open_category("SHIFRLAR VA KODLAR", [
+        ("MORSE SHIFRLASH", open_morse_pro),
+        ("SEZAR SHIFRI", open_sezar_pro),
+        ("BASE64 ", open_base64_pro),
+        ("BINARY CONVERTER", open_binary_pro),
+        ("HASH GENERATOR", open_hash_pro),
+    ])
+
+def open_matematika():
+    open_category("MATEMATIKA VA HISOB", [
+        ("KVADRAT TENGLAMA", open_quadratic),
+        ("CALCULATOR ", open_calculator),
+    ])
+
+def open_konverterlar():
+    open_category("KONVERTERLAR", [
+        ("OFFLINE TARJIMON ", open_translator),
+    ])
+
+def open_qiziqarli():
+    open_category("QIZIQLI VOSITALAR", [
+        ("STOPWATCH", lambda: messagebox.showinfo("Stopwatch", "Tez orada qo'shiladi!")),
+        ("ROCK PAPER SCISSORS", lambda: messagebox.showinfo("O'yin", "Tez orada qo'shiladi!")),
+        ("SYGO CHATBOT", open_chatbot),   # ✅ Yangi chatbot tugmasi
+    ])
+# ======================= TEPADAGI MENYU =======================
+def settings():
+    messagebox.showinfo("Settings", "BEXRUZ BLACKHOLE 2025\nMuallif: Bexruz Xoshimov\nTemurbeklar maktabi\nParol: bexruz\nVersiya: 2.5 Final")
+
+def help_menu():
+    messagebox.showinfo("Yordam", "Barcha funksiyalar offline ishlaydi!\nYangi versiyalar tez orada!")
+
+def about():
+    messagebox.showinfo("About", "© 2025 Bexruz Xoshimov\nTemurbeklar maktabi | Farg'ona\nO'zbekistonning eng zo'r ilovasi!")
+
+# ======================= ASOSIY OYNA =======================
+def open_main_app():
+    global root
+    root = tk.Tk()
+    root.title("BLACKHOLE ")
+    root.geometry("750x1000")
+    root.config(bg="#000000")
+
+    # ================= Canvas + movable frame =================
+    canvas = tk.Canvas(root, bg="#000000", highlightthickness=0)
+    canvas.pack(fill="both", expand=True)
+    
+    main_frame = tk.Frame(canvas, bg="#000000")
+    
+    window_id = canvas.create_window((0, 0), window=main_frame, anchor="nw")
+    
+    # Scroll region yangilash
+    def on_configure(event):
+        canvas.configure(scrollregion=canvas.bbox("all"))
+    
+    main_frame.bind("<Configure>", on_configure)
+    
+    # Frame kengligini canvas kengligiga tenglashtirish
+    def resize_frame(event):
+        canvas.itemconfig(window_id, width=event.width)
+    
+    canvas.bind("<Configure>", resize_frame)
+    
+    # Mouse wheel bilan tepaga-pastga
+    def scroll_move(event):
+        canvas.yview_scroll(int(-1*(event.delta/120)), "units")
+    
+    canvas.bind_all("<MouseWheel>", scroll_move)
+    # ================= Asosiy kontent =================
+    top_bar = tk.Frame(main_frame, bg="#000000")
+    top_bar.pack(fill="x", pady=5)
+    tk.Button(top_bar, text="⚙️ Settings", bg="#000000", fg="white", command=settings).pack(side="left", padx=15)
+    tk.Button(top_bar, text="❓ Help", bg="#000000", fg="white", command=help_menu).pack(side="left", padx=15)
+    tk.Button(top_bar, text="ℹ️ About", bg="#000000", fg="white", command=about).pack(side="right", padx=15)
+
+    tk.Label(main_frame, text="BLACKHOLE", font=("Arial", 34, "bold"), fg="#FF0000", bg="#000000").pack(pady=80)
+
+    categories = [
+        ("SHIFRLAR", open_shifrlar),
+        ("MATEMATIKA", open_matematika),
+        ("KONVERTERLAR", open_konverterlar),
+        ("QIZIQLI", open_qiziqarli),
+    ]
+
+    for text, cmd in categories:
+        tk.Button(main_frame, text=text, width=40, height=5, font=("Arial", 18, "bold"),
+                  bg="#111111", fg="#FFFFFF", highlightbackground="#FF0000", highlightthickness=4,
+                  command=cmd).pack(pady=30)
+
+    status = tk.Label(main_frame, text="© Bexruz Xoshimov | Temurbeklar maktabi | 2025",
+                      fg="#00FF00", bg="#111111", font=("Consolas", 11), relief="sunken")
+    status.pack(side="bottom", fill="x")
+
+    apply_dark(main_frame)
+    root.mainloop()
+# ======================= LOGIN OYNA =======================
+login_win = tk.Tk()
+login_win.title(" Blackhole ")
+login_win.geometry("600x500")
+login_win.config(bg="#000000")
+login_win.resizable(False, False)
+
+tk.Label(login_win, text=" BLACKHOLE ", font=("Arial", 28, "bold"), fg="#E6FF09", bg="#000000").pack(pady=80)
+tk.Label(login_win, text="Parolni kiriting:", font=18, fg="#FFFFFF", bg="#000000").pack(pady=20)
+
+entry = tk.Entry(login_win, width=35, font=18, show="*", bg="#111111", fg="#FFFFFF", justify="center")
+entry.pack(pady=20)
+entry.focus()
+
+attempts = [0]
+
+tk.Button(login_win, text="KIRISH", width=30, height=2, bg="#006400", fg="white", font=("Arial", 14, "bold"), command=check_password).pack(pady=40)
+
+tk.Label(login_win, text="Maslahat: bexruz", font=("Consolas", 10), fg="#555555", bg="#000000").pack(pady=20)
+
+login_win.bind('<Return>', lambda e: check_password())
+apply_dark(login_win)
+login_win.mainloop()
